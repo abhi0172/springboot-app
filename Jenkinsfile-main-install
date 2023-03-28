@@ -1,0 +1,48 @@
+pipeline {
+   tools {
+        maven 'maven3'
+    }
+    agent any
+    environment {
+        registry = "004689945587.dkr.ecr.us-east-1.amazonaws.com/eks-repo"
+    }
+   
+    stages {
+        stage('Cloning Git') {
+            steps {
+                git branch: 'main', url: 'https://github.com/abhi0172/springboot-app.git'   
+            }
+        }
+        stage('Build') {
+            steps {
+             sh 'mvn clean install'           
+                }
+            }
+        
+        stage('Building image') {
+            steps{
+             script {
+                dockerImage = docker.build registry 
+                }
+            }
+        }
+        stage('Pushing to ECR') {
+            steps{  
+              script {
+                    sh 'aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 004689945587.dkr.ecr.us-east-1.amazonaws.com'
+                    sh 'docker push 004689945587.dkr.ecr.us-east-1.amazonaws.com/eks-repo:latest'
+                }
+            }
+        }
+
+        stage('K8S Deploy') {
+            steps{   
+                script {
+                    withKubeConfig([credentialsId: 'K8S', serverUrl: '']) {
+                        sh ('kubectl apply -f  eks-deploy-k8s.yaml')
+                    }
+                }
+            }
+       }
+    }
+}
